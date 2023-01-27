@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Confirmation</title>
+</head>
+<body data-th-object="${order}">
+    <h2>Order Confirmation Page</h2>
+    Order Number: <span th:text="*{id}"></span>
+    <br>
+    Your order will be delivered to: <span th:text="*{address}"></span>
+    <br>
+    Pizza cost: <span th:text="*{totalCost}"></span>
+    <br> 
+    Rush: <span th:text="*{rush}"></span>
+    <br>
+    Total Cost: <span th:text="*{totalCost}"></span>
+</body>
+</html>
