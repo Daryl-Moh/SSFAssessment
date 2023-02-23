@@ -1,38 +1,83 @@
 package sg.edu.nus.iss.app.ssfassessment.controller;
 
-import java.io.IOException;
+import java.util.List;
+import org.jboss.logging.Logger;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
+import org.springframework.validation.ObjectError;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 
+import jakarta.servlet.http.HttpSession;
+import jakarta.validation.Valid;
+
+import sg.edu.nus.iss.app.ssfassessment.model.Delivery;
+import sg.edu.nus.iss.app.ssfassessment.model.Order;
 import sg.edu.nus.iss.app.ssfassessment.model.Pizza;
 import sg.edu.nus.iss.app.ssfassessment.service.PizzaService;
 
 
 @Controller
-@RequestMapping(path="/pizza")
 public class PizzaController {
 
-    // Supposed to do some validation for the landing page inputs 
-    // but I cannot seem to modify the thymeleaf portion to do validation
     @Autowired
-    PizzaService pizzaService;
+    private PizzaService pizzaSvc;
 
-    @PostMapping
-        public String calculateOrder(@RequestParam(required=true) String pizza,
-                            @RequestParam(required=true) String size,
-                            @RequestParam(required=true) Integer quantity,
-                            Model model) throws IOException {
-            Pizza p = new Pizza(pizza, size, quantity); 
-            p.setTotalCost(this.pizzaService.cost(pizza, size, quantity));   
-            model.addAttribute("order", p);
-            pizzaService.saveToDb(p);
-            return "delivery";
+    private Logger logger = Logger.getLogger(PizzaController.class.getName());
+
+    @GetMapping(path={"/", "index.html"})
+    public String getIndex(Model model, HttpSession sess) {
+        sess.invalidate();
+        model.addAttribute("pizza", new Pizza());
+        return "index";
+    }
+
+    @PostMapping(path="/pizza")
+    public String postPizza(Model model, HttpSession sess
+            , @Valid Pizza pizza, BindingResult bindings) {
+
+        logger.info(("POST /pizza: %s".formatted(pizza.toString())));
+
+        // Syntatic and semantic validation
+        if(bindings.hasErrors())
+            return "index";
+        
+        List<ObjectError> errors = pizzaSvc.validatePizzaOrder(pizza); 
+        if(!errors.isEmpty()) {
+            for(ObjectError err: errors)
+                bindings.addError(err);
+            return "index";
         }
+
+        sess.setAttribute("pizza", pizza);
+
+        model.addAttribute("delivery", new Delivery());
+
+        return "delivery";
+    }
+
+    @PostMapping(path="/pizza/order")
+    public String postPizzaOrder(Model model, HttpSession sess
+            , @Valid Delivery delivery, BindingResult bindings) {
+        
+        logger.info("POST /pizza/order: %s".formatted(delivery.toString()));
+        
+        if(bindings.hasErrors())
+            return "delivery";
+
+        Pizza pizza = (Pizza)sess.getAttribute("pizza");
+
+        Order order = pizzaSvc.savePizzaOrder(pizza, delivery);
+
+        logger.info("%s".formatted(order));
+
+        model.addAttribute("order", order);
+
+        return "order";
+    }
 
     
 

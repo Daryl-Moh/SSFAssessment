@@ -1,70 +1,118 @@
 package sg.edu.nus.iss.app.ssfassessment.service;
 
-import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.validation.FieldError;
+import org.springframework.validation.ObjectError;
 
+import sg.edu.nus.iss.app.ssfassessment.model.Delivery;
+import sg.edu.nus.iss.app.ssfassessment.model.Order;
 import sg.edu.nus.iss.app.ssfassessment.model.Pizza;
+import sg.edu.nus.iss.app.ssfassessment.repository.PizzaRepository;
 
 @Service
 public class PizzaService {
 
     @Autowired
-    RedisTemplate<String, Object> redisTemplate;
+    private PizzaRepository pizzaRepo;
 
+    public static final String[] PIZZA_NAMES = {
+            "bella", "margherita", "marinara", "spianatacalabrese", "trioformaggio"
+    };
 
-    // Not sure why it is not setting into the database
+    public static final String[] PIZZA_SIZES = { "sm", "md", "lg" };
 
-    public void saveToDb (final Pizza pza) {
-        System.out.println("pza " + pza.toJSON().toString());
-        redisTemplate.opsForValue().set(pza.getId(), pza.toJSON().toString());
-       
+    public final Set<String> pizzaNames;
+    public final Set<String> pizzaSizes;
+
+    public PizzaService() {
+        pizzaNames = new HashSet<>(Arrays.asList(PIZZA_NAMES));
+        pizzaSizes = new HashSet<>(Arrays.asList(PIZZA_SIZES));
     }
 
-    public Double cost (String pType, String pSize, Integer pQty) {
-        Double totalPrice=0.0d;
-        Integer pizzaPrice=0;
-        Double multipler=0.0d;
+    public Optional<Order> getOrderByOrderId(String orderId) {
+        return pizzaRepo.get(orderId);
+    }
 
-        switch(pType) {
-            case "bella":
-                pizzaPrice=30;
+    public Order createPizzaOrder(Pizza pizza, Delivery delivery) {
+        String orderId = UUID.randomUUID().toString().substring(0, 8);
+        Order order = new Order(pizza, delivery);
+        order.setOrderId(orderId);
+        return order;
+    }
+
+    public Order savePizzaOrder(Pizza pizza, Delivery delivery) {
+        Order order = createPizzaOrder(pizza, delivery);
+        calculateCost(order);
+        pizzaRepo.save(order);
+        return order;
+    }
+
+    public List<ObjectError> validatePizzaOrder (Pizza pizza) {
+        List<ObjectError> errors = new LinkedList<>();
+        FieldError error;
+
+        if (!pizzaNames.contains(pizza.getPizza().toLowerCase())) {
+            error = new FieldError("pizza", "pizza"
+            ,"We do not have %s pizza".formatted(pizza.getPizza()));
+
+            errors.add(error);
+        }
+
+        if (!pizzaSizes.contains(pizza.getSize().toLowerCase())) {
+
+            error = new FieldError("pizza", "size"
+            , "We do have have %s size".formatted(pizza.getSize()));
+
+            errors.add(error);
+        }
+
+        return errors;
+    }
+
+    public float calculateCost(Order order) {
+        float total = 0f;
+
+        switch (order.getPizza()) {
             case "margherita":
-                pizzaPrice=22;
-            case "marinara":
-                pizzaPrice=30;
-            case "spianatacalabrese":
-                pizzaPrice=30;
-            case "trioformaggio":
-                pizzaPrice=25;
+				total += 22;
+				break;
+			case "trioformaggio":
+				total += 25;
+				break;
+			case "bella", "marinara", "spianatacalabrese":
+				total += 30;
+				break;
+			default:
         }
 
-        switch(pSize) {
-            case "sm":
-                multipler=1.0d;
+        switch (order.getSize()) {
             case "md":
-                multipler=1.2d;
-            case "lg":
-                multipler=1.5d;
+				total *= 1.2;
+				break;
+			case "lg":
+				total *= 1.5;
+				break;
+			case "sm":
+			default:
         }
 
-        totalPrice = (pizzaPrice*multipler*pQty);
+        total *= order.getQuantity();
 
-        System.out.println("pizza type: " + pType);
-        System.out.println("pizza size: " + pSize);
-        System.out.println("pizza qty: " + pQty);
-        System.out.println("pizza total price: " + totalPrice);
+        if(order.isRush())
+            total += 2;
 
-        return totalPrice;
+        order.setTotalCost(total);
 
+        return total;
     }
 
-    public Pizza findById(final String id) throws IOException {
-        String pStr = (String) redisTemplate.opsForValue().get(id);
-        Pizza p = Pizza.create(pStr);
-        return p;
-    }
-    
 }
